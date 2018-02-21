@@ -48,33 +48,42 @@ def sample_mask(idx, l):
     return np.array(mask, dtype=np.bool)
 
 
+def load_cora_data():
+    labels = None
+    features = None
+    adj = np.load(
+        '{}/../data/cora_adj.npy'.format(
+            current_folder))
+    dic = convert_npy_to_dic(adj)
+    return load_data_from_adj(dic, labels, features)
+
+
 def load_blog_data():
     labels = None
     features = None
 
     if not FLAGS.need_batch:
         adj = np.load(
-            '{}/../data/BlogCatalog-dataset/data/blog_{}.npy'.format(
+            '{}/../data/blog_{}.npy'.format(
                 current_folder, 'adj' if FLAGS.dataset == 'blog' else 'hidden'))
         return load_data_from_adj(adj, labels, features)
 
-    edge_list_path = '{}/../data/BlogCatalog-dataset/data/edges.csv'.format(
+    edge_list_path = '{}/../data/edges.csv'.format(
         current_folder)
     dic = load_adj_list(edge_list_path)
 
     return load_data_from_adj(dic, labels, features)
 
 
-def load_cora_data():
+def load_flickr_data():
     labels = None
     features = None
-    adj = np.load(
-        '{}/../data/cora-dataset/data/cora_adj.npy'.format(
-            current_folder))
-    dic = convert_npy_to_dic(adj)
+    edge_list_path = '{}/../data/{}.csv'.format(
+                current_folder, 'flickr_hidden.edgelist' if FLAGS.dataset == 'flickr_hidden'
+        else 'edges')
+    print('edge_list_path', edge_list_path)
+    dic = load_adj_list(edge_list_path)
     return load_data_from_adj(dic, labels, features)
-
-
 
 def convert_npy_to_dic(adj):
     dic = collections.defaultdict(list)
@@ -89,22 +98,9 @@ def convert_npy_to_dic(adj):
     return dic
 
 
-def load_flickr_data():
-    labels = None
-    features = None
-    edge_list_path = '{}/../data/Flickr-dataset/data/{}.csv'.format(
-                current_folder, 'flickr_hidden.edgelist' if FLAGS.dataset == 'flickr_hidden'
-        else 'edges')
-    print('edge_list_path', edge_list_path)
-    dic = load_adj_list(edge_list_path)
-    return load_data_from_adj(dic, labels, features)
-
-
-def id(i):
-    return int(i) - 1
-
-
 def load_adj_list(edge_list_path):
+    def id(i):
+        return int(i) - 1
 
     pickle_path = '{}/../data/save/{}_neighbor_map.pickle'.format(current_folder,
                                                         FLAGS.dataset)
@@ -140,29 +136,17 @@ def load_data_from_adj(adj, labels=None, features=None):
         labels = proc_labels(adj, remove_self)
     else:
         labels = normalize(labels, norm='l1')
-    # if features is not None:
-    #     features = normalize(features, norm='l2')
-    train_mask = sample_mask(range(N), N)
-    all_ids = list(range(N))
-    random.Random(188).shuffle(all_ids)
-    valid_ids = all_ids[0:int(ceil(0.1 * N))] # 10%
-    test_ids = all_ids[int(ceil(0.1 * N)):int(ceil((1 - FLAGS.train_ratio) *
-                                                 N))] # test 1-train_ratio-0.1
-    train_mask.fill(1)
-    unseen_ids = (valid_ids + test_ids)
-    for id in unseen_ids:
-        train_mask[id] = 0
-    return adj, features, labels, train_mask, valid_ids, test_ids
+    return adj, features, labels
 
 
-def load_data(dataset_str, embed):
+def load_data(dataset_str):
     """Load data."""
-    if 'blog' in dataset_str:
-        return load_blog_data()
-    if 'flickr' in dataset_str:
-        return load_flickr_data()
     if dataset_str == 'cora':
         return load_cora_data()
+    if dataset_str == 'blog':
+        return load_blog_data()
+    if dataset_str == 'flickr':
+        return load_flickr_data()
 
 def proc_labels(labels, remove_self=False):
     if remove_self:
@@ -298,13 +282,13 @@ def get_shape(mat):
     return mat.shape
 
 
-def construct_feed_dict(adj, features, support, labels, labels_mask,
+def construct_feed_dict(adj, features, support, labels,
                         placeholders, loss):
     """Construct feed dictionary."""
     feed_dict = dict()
     feed_dict.update(
         {placeholders['support'][i]: support[i] for i in range(len(support))})
-    if FLAGS.need_batch and (FLAGS.embed == 2 or FLAGS.embed == 3):
+    if FLAGS.need_batch:
         # assert (type(labels) is dict)
         batch, pos_labels, neg_labels, usl_labels = generate_batch(adj, loss)
         # print('batch', batch)
@@ -316,7 +300,7 @@ def construct_feed_dict(adj, features, support, labels, labels_mask,
         feed_dict.update({placeholders['pos_labels']: pos_labels})
         feed_dict.update({placeholders['neg_labels']: neg_labels})
         feed_dict.update({placeholders['usl_labels']: usl_labels})
-    elif FLAGS.embed == 2:
+    else:
         feed_dict.update({placeholders['usl_labels']: labels})
         N = get_shape(labels)[0]
         inf_diagonal = np.zeros((N, N))

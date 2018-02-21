@@ -20,15 +20,6 @@ def get_layer_uid(layer_name=''):
         return _LAYER_UIDS[layer_name]
 
 
-def sparse_dropout(x, keep_prob, noise_shape):
-    """Dropout for sparse tensors."""
-    random_tensor = keep_prob
-    random_tensor += tf.random_uniform(noise_shape)
-    dropout_mask = tf.cast(tf.floor(random_tensor), dtype=tf.bool)
-    pre_out = tf.sparse_retain(x, dropout_mask)
-    return pre_out * (1. / keep_prob)
-
-
 def dot(x, y, sparse=False):
     """Wrapper for tf.matmul (sparse vs dense)."""
     if sparse:
@@ -44,7 +35,6 @@ class Layer(object):
 
     # Properties
         name: String, defines the variable scope of the layer.
-        logging: Boolean, switches Tensorflow histogram logging on/off
 
     # Methods
         _call(inputs): Defines computation graph of layer
@@ -54,7 +44,7 @@ class Layer(object):
     """
 
     def __init__(self, **kwargs):
-        allowed_kwargs = {'name', 'logging'}
+        allowed_kwargs = {'name'}
         for kwarg in kwargs.keys():
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
         name = kwargs.get('name')
@@ -63,8 +53,6 @@ class Layer(object):
             name = layer + '_' + str(get_layer_uid(layer))
         self.name = name
         self.vars = {}
-        logging = kwargs.get('logging', False)
-        self.logging = logging
         self.sparse_inputs = False
 
     def _call(self, inputs):
@@ -72,11 +60,7 @@ class Layer(object):
 
     def __call__(self, inputs):
         with tf.name_scope(self.name):
-            # if self.logging and not self.sparse_inputs:
-            #     tf.summary.histogram(self.name + '/inputs', inputs)
             outputs = self._call(inputs)
-            # if self.logging:
-            #     tf.summary.histogram(self.name + '/outputs', outputs)
             self.outputs = outputs
             return outputs
 
@@ -88,15 +72,10 @@ class Layer(object):
 class Dense(Layer):
     """Dense layer."""
 
-    def __init__(self, input_dim, output_dim, placeholders, dropout=0.,
+    def __init__(self, input_dim, output_dim, placeholders,
                  sparse_inputs=False,
                  act=tf.nn.relu, bias=False, featureless=False, **kwargs):
         super(Dense, self).__init__(**kwargs)
-
-        if dropout:
-            self.dropout = placeholders['dropout']
-        else:
-            self.dropout = None
 
         self.act = act
         self.sparse_inputs = sparse_inputs
@@ -109,15 +88,9 @@ class Dense(Layer):
             if self.bias:
                 self.vars['bias'] = zeros([output_dim], name='bias')
 
-        if self.logging:
-            self._log_vars()
 
     def _call(self, inputs):
         x = inputs
-
-        # dropout
-        if not self.featureless and self.dropout is not None:
-                x = tf.nn.dropout(x, 1-self.dropout)
 
         # transform
         if not self.featureless:
@@ -135,24 +108,17 @@ class Dense(Layer):
 class NeighborAggregation(Layer):
     """Graph convolution layer."""
 
-    def __init__(self, input_dim, output_dim, placeholders, dropout=0.,
+    def __init__(self, input_dim, output_dim, placeholders,
                  sparse_inputs=False, act=tf.nn.relu, bias=False,
                  featureless=False, **kwargs):
         super(NeighborAggregation, self).__init__(**kwargs)
 
-        if dropout:
-            #self.dropout = placeholders['dropout']
-            self.dropout = dropout
-        else:
-            self.dropout = None
 
         self.act = act
         self.support = placeholders['support']
         self.sparse_inputs = sparse_inputs
         self.featureless = featureless
         self.bias = bias
-
-        # helper variable for sparse dropout)
 
         with tf.variable_scope(self.name + '_vars'):
             for i in range(len(self.support)):
@@ -162,18 +128,10 @@ class NeighborAggregation(Layer):
             if self.bias:
                 self.vars['bias'] = zeros([output_dim], name='bias')
 
-        if self.logging:
-            self._log_vars()
 
     def _call(self, inputs):
         x = inputs
 
-        # dropout
-        if not self.featureless and self.dropout is not None:
-
-            x = tf.nn.dropout(x, 1-self.dropout) #the argument is the keep_prob
-
-        # convolve
         supports = list()
         for i in range(len(self.support)):
             if not self.featureless:
@@ -195,15 +153,11 @@ class NeighborAggregation(Layer):
 class Embedding(Layer):
     """Graph embedding layer."""
 
-    def __init__(self, input_dim, output_dim, placeholders, dropout=0.,
+    def __init__(self, input_dim, output_dim, placeholders,
                  sparse_inputs=False, act=tf.nn.relu, bias=False,
                  featureless=False, model=None, **kwargs):
         super(Embedding, self).__init__(**kwargs)
 
-        if dropout:
-            self.dropout = placeholders['dropout']
-        else:
-            self.dropout = 0.
 
         self.act = act
         self.sparse_inputs = sparse_inputs
@@ -217,8 +171,6 @@ class Embedding(Layer):
             self.neg_labels = placeholders['neg_labels']
             self.num_data = placeholders['num_data']
 
-        if self.logging:
-            self._log_vars()
 
         self.model = None
         if model:

@@ -77,8 +77,7 @@ class NANE(Model):
 
         self.inputs = placeholders.get('features')
         self.input_dim = input_dim
-        if FLAGS.embed == 2 or FLAGS.embed == 3:
-            self.usl_output_dim = \
+        self.usl_output_dim = \
             placeholders['usl_labels'].get_shape().as_list()[1]
         self.placeholders = placeholders
 
@@ -90,10 +89,8 @@ class NANE(Model):
     def _loss(self):
         # Cross entropy error
         self.usl_labels = self.placeholders['usl_labels']
-        loss = masked_softmax_cross_entropy(self.outputs,
-                                            self.usl_labels,
-                                            None,
-                                            model=self)
+        loss = softmax_cross_entropy(self.outputs,
+                                     self.usl_labels)
         self.loss += loss
 
     def _accuracy(self):
@@ -101,40 +98,25 @@ class NANE(Model):
                                  self.placeholders['labels'])
 
     def _build(self):
+        self.layers.append(NeighborAggregation(input_dim=self.input_dim,
+                                               output_dim=FLAGS.hidden1,
+                                               placeholders=self.placeholders,
+                                               act=tf.nn.relu,
+                                               sparse_inputs=False,
+                                               featureless=self.inputs is None))
+
+        self.layers.append(NeighborAggregation(input_dim=FLAGS.hidden1,
+                                               output_dim=FLAGS.hidden2,
+                                               placeholders=self.placeholders,
+                                               act=lambda x : x,
+                                               sparse_inputs=False))
 
 
-
-        if FLAGS.embed == 2 or FLAGS.embed == 3:
-            self.layers.append(NeighborAggregation(input_dim=self.input_dim,
-                                                output_dim=FLAGS.hidden1,
-                                                placeholders=self.placeholders,
-                                                act=tf.nn.relu,
-                                                dropout=0,
-                                                sparse_inputs=False,
-                                                featureless=self.inputs is None,
-                                                logging=self.logging))
-
-            self.layers.append(NeighborAggregation(input_dim=FLAGS.hidden1,
-                                                output_dim=FLAGS.hidden2,
-                                                placeholders=self.placeholders,
-                                                act=lambda x : x,
-                                                dropout=0,
-                                                sparse_inputs=False,
-                                                logging=self.logging))
-
-        if FLAGS.embed == 2 or FLAGS.embed == 3:
-            if FLAGS.embed == 2:
-                layers = self.layers
-            else:
-                self.usl_layers = []
-                layers = self.usl_layers
-            layers.append(Embedding(input_dim=100,
-                                    output_dim=self.usl_output_dim,
-                                    placeholders=self.placeholders,
-                                    act=lambda x: x,
-                                    dropout=False,
-                                    logging=self.logging,
-                                    model=self))
+        self.layers.append(Embedding(input_dim=100,
+                                     output_dim=self.usl_output_dim,
+                                     placeholders=self.placeholders,
+                                     act=lambda x: x,
+                                     model=self))
 
     def predict(self):
         return tf.nn.softmax(self.outputs)
