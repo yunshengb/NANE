@@ -1,4 +1,4 @@
-#NANE
+# NANE
 
 This is a sample implementation of Neighbor Aggregative Network Embedding.
 
