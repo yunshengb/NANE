@@ -325,8 +325,8 @@ def generate_batch(neighbor_map, loss, num_neg=5):
     if round == 0:
         ids = list(range(0, len(neighbor_map)))
         neg_sampler.init(len(neighbor_map))
-        #dynamic_sampler.init(neighbor_map)
-    #grow_neighbor(neighbor_map, loss)
+        dynamic_sampler.init(neighbor_map)
+    grow_neighbor(neighbor_map, loss)
     batch_size, num_data = get_size(neighbor_map, data_index, max_size)
     print('round: {} \tbatch_size: {} \t num_data: {}'.format(round,
                                                               batch_size,
@@ -335,7 +335,7 @@ def generate_batch(neighbor_map, loss, num_neg=5):
     pos_labels = np.zeros(shape=(batch_size, 1))
     neg_labels_col = num_neg
     labels_col = num_neg + 1
-    if FLAGS.need_second:
+    if FLAGS.need_higher:
         neg_labels_col = 7
         labels_col = 8
     neg_labels = np.zeros(shape=(batch_size, neg_labels_col))
@@ -348,19 +348,13 @@ def generate_batch(neighbor_map, loss, num_neg=5):
         pos_labels[s:s + len(ns), 0] = ns
         negs = neg_sampler.get_neg(ns)
         assert(len(negs)==5)
-        if FLAGS.need_second:
+        if FLAGS.need_higher:
             for j in range(len(ns)):
-                # aux, weights = dynamic_sampler.get_higher_order_neighbors(id)
-                sec = random.choice(neighbor_map[random.choice(ns)])
-                sec2 = random.choice(neighbor_map[random.choice(ns)])
-                aux = [sec, sec2]
-                weights = [0.5, 0.25, 0.25]
+                aux, weights = dynamic_sampler.get_higher_order_neighbors(id)
                 for k, neg in enumerate(negs):
-                    fir = True
                     while neg in aux + [id]:
                         neg = random.choice(range(len(neighbor_map)))
                         negs[k] = neg
-                        fir = False
                 neg_labels[s+j] = aux + negs
                 labels[s+j][0] = weights[0]
                 labels[s+j][1] = weights[1]
@@ -385,7 +379,7 @@ retain = 0
 done = False
 def grow_neighbor(neighbor_map, loss):
     global prev_loss, retain, dynamic_sampler, done
-    if FLAGS.need_second != 2:
+    if not FLAGS.need_higher:
         return
     # if done:
     #    return

@@ -32,8 +32,8 @@ flags.DEFINE_integer('hidden1', 200, 'Number of units in hidden layer 1.')
 flags.DEFINE_integer('hidden2', 100, 'Number of units in hidden layer 2.')
 flags.DEFINE_float('train_ratio', 0.2, 'Ratio of training data.')
 flags.DEFINE_float('dropout', 0.2, 'Dropout rate (1 - keep probability).')
-flags.DEFINE_integer('need_second', 2, 'Need second-order neighbors for '
-                                       'unsupervised learning or not.')
+flags.DEFINE_integer('fs', 1, 'Fast sampling of higher-order neighbors.')
+flags.DEFINE_integer('need_higher', 1, 'Need higher-order neighbors.')
 
 # Load data
 adj, features, y_train = load_data(FLAGS.dataset)
@@ -53,9 +53,8 @@ if FLAGS.need_batch:
     placeholders['batch'] = tf.placeholder(tf.int32)
     placeholders['pos_labels'] = tf.placeholder(tf.int32)
     placeholders['neg_labels'] = tf.placeholder(tf.int32)
-    placeholders['usl_labels'] = tf.placeholder(tf.float32, shape=(None,
-                                                                   8 if
-                                                                   FLAGS.need_second else 6))
+    placeholders['usl_labels'] = tf.placeholder( \
+        tf.float32, shape=(None, 8 if FLAGS.need_higher else 6))
     placeholders['num_data'] = get_shape(adj)[0]
 else:
     placeholders['usl_labels'] = tf.placeholder(tf.float32, shape=(N, N))
@@ -121,7 +120,5 @@ for epoch in range(FLAGS.epochs):
           "{:.5f}".format(loss),
           "time=",
           "{:.5f}".format(time.time() - t))
-
-
 
 print("done")

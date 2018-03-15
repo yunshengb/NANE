@@ -17,7 +17,7 @@ def neg_sampling(input, batch, pos_labels, neg_labels, num_neg=5,
                           tf.nn.embedding_lookup(input, neg_labels)], 1)
 
     sims_col = num_neg + 1
-    if FLAGS.need_second:
+    if FLAGS.need_higher:
         sims_col = 8
 
     sims = tf.reshape(tf.matmul(generate_samples(), generate_batch()), shape=(
@@ -136,6 +136,11 @@ class DynamicSampler(object):
 
 
     def get_higher_order_neighbors(self, i):
+        if FLAGS.fs:
+            ns = self.neighbor_map[i]
+            return [random.choice(self.neighbor_map[random.choice(ns)]),
+                    random.choice(self.neighbor_map[random.choice(ns)])], \
+                   [0.5, 0.25, 0.25]
         if not self.higher_neigh_ids[i]: # no higher order neighbors
             return [int(len(self.neighbor_map)*random.uniform(0, 1)) \
                     for _ in range(self.K)], [1]+[0 for _ in range(self.K)]
